@@ -1,44 +1,219 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="id">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GEOLOCATION</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pencari Lokasi · MapTiler</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --base: #e3e7ee;
+    --hi: #ffffff;
+    --lo: #a9b4c6;
+    --ink: #33415c;
+    --mute: #7b879c;
+    --accent: #1fa596;
+    --err: #c4514a;
+    --out: 9px 9px 18px var(--lo), -9px -9px 18px var(--hi);
+    --out-sm: 5px 5px 10px var(--lo), -5px -5px 10px var(--hi);
+    --in: inset 6px 6px 12px var(--lo), inset -6px -6px 12px var(--hi);
+    --in-sm: inset 3px 3px 6px var(--lo), inset -3px -3px 6px var(--hi);
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    font-family: 'Sora', system-ui, sans-serif;
+    background: var(--base);
+    color: var(--ink);
+    min-height: 100vh;
+    padding: 40px 20px 60px;
+  }
+  main { max-width: 980px; margin: 0 auto; }
+  h1 { font-size: clamp(1.6rem, 4vw, 2.4rem); font-weight: 800; letter-spacing: -.02em; }
+  .sub { color: var(--mute); margin-top: 6px; font-size: .95rem; }
+
+  .layout { display: grid; grid-template-columns: 1.1fr .9fr; gap: 32px; margin-top: 32px; }
+  @media (max-width: 800px) { .layout { grid-template-columns: 1fr; } }
+
+  .panel { background: var(--base); border-radius: 28px; box-shadow: var(--out); padding: 28px; }
+
+  label { display: block; font-size: .85rem; color: var(--mute); margin: 0 0 8px 6px; }
+  .field { margin-bottom: 20px; }
+  input {
+    width: 100%; border: 0; outline: 0; background: var(--base);
+    border-radius: 16px; box-shadow: var(--in);
+    padding: 15px 18px; font: inherit; color: var(--ink);
+  }
+  input:focus-visible { box-shadow: var(--in), 0 0 0 2px var(--accent); }
+  input::placeholder { color: #a3adbf; }
+  .key input { padding: 11px 16px; font-size: .85rem; box-shadow: var(--in-sm); }
+
+  button {
+    font: inherit; font-weight: 600; color: var(--ink); cursor: pointer;
+    border: 0; background: var(--base); border-radius: 16px;
+    box-shadow: var(--out-sm); padding: 14px 26px; width: 100%;
+    transition: box-shadow .15s, color .15s;
+  }
+  button:hover { color: var(--accent); }
+  button:active { box-shadow: var(--in-sm); }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+  /* Hasil */
+  .results { margin-top: 28px; display: grid; gap: 14px; }
+  .row {
+    display: flex; justify-content: space-between; align-items: baseline; gap: 16px;
+    background: var(--base); border-radius: 16px; box-shadow: var(--in-sm);
+    padding: 14px 18px;
+  }
+  .row span:first-child { color: var(--mute); font-size: .85rem; }
+  .row span:last-child { font-weight: 600; text-align: right; word-break: break-word; }
+
+  /* Pelat peta: elemen utama */
+  .plate-wrap { display: flex; flex-direction: column; align-items: center; gap: 22px; }
+  .plate {
+    position: relative; width: 100%; aspect-ratio: 2 / 1;
+    border-radius: 24px; box-shadow: var(--in); background:
+      radial-gradient(circle, var(--lo) 1.2px, transparent 1.6px) 0 0 / 18px 18px,
+      var(--base);
+    overflow: hidden;
+  }
+  .plate::before, .plate::after { content: ""; position: absolute; background: var(--lo); opacity: .55; }
+  .plate::before { left: 0; right: 0; top: 50%; height: 1px; }
+  .plate::after { top: 0; bottom: 0; left: 50%; width: 1px; }
+  .pin {
+    position: absolute; width: 22px; height: 22px; border-radius: 50%;
+    background: var(--accent); box-shadow: 0 0 0 6px var(--base), 0 0 0 7px var(--lo), 4px 4px 12px var(--lo);
+    transform: translate(-50%, -50%); left: 50%; top: 50%;
+    opacity: 0; transition: left .7s cubic-bezier(.3,1.3,.5,1), top .7s cubic-bezier(.3,1.3,.5,1), opacity .3s;
+  }
+  .pin.on { opacity: 1; }
+  .dial {
+    width: 150px; height: 150px; border-radius: 50%; box-shadow: var(--out);
+    display: grid; place-items: center; text-align: center; padding: 22px;
+  }
+  .dial div { width: 100%; height: 100%; border-radius: 50%; box-shadow: var(--in); display: grid; place-items: center; font-size: .78rem; color: var(--mute); line-height: 1.5; }
+  .dial b { color: var(--ink); font-size: .9rem; }
+
+  .msg { min-height: 1.4em; margin-top: 16px; font-size: .88rem; color: var(--mute); }
+  .msg.err { color: var(--err); }
+
+  details { margin-top: 28px; }
+  summary { cursor: pointer; color: var(--mute); font-size: .88rem; margin-left: 6px; }
+  pre {
+    margin-top: 12px; padding: 16px; border-radius: 16px; box-shadow: var(--in-sm);
+    overflow: auto; max-height: 280px; font-size: .75rem; line-height: 1.5;
+  }
+
+  @media (prefers-reduced-motion: reduce) { .pin { transition: none; } }
+</style>
 </head>
 <body>
-   
-    <h3>Nama : Admaja Bahari</h3>
-    <h3>NIM : 1234567890</h3>
+<main>
+  <h1>Pencari Lokasi</h1>
+  <p class="sub">Ketik nama tempat, dapatkan negara, provinsi, kecamatan, dan koordinatnya dari MapTiler.</p>
 
-    <p>
-        Kota :
-        <span id="lokasi"></span>
-    </p>
+  <div class="layout">
+    <section class="panel" aria-label="Formulir pencarian">
+      <div class="field key">
+        <label for="apikey">API key MapTiler</label>
+        <input id="apikey" type="password" placeholder="Tempel API key (disimpan di browser ini)" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="lokasi">Lokasi</label>
+        <input id="lokasi" type="text" placeholder="Contoh: Kasihan, Bantul" autocomplete="off">
+      </div>
+      <button id="cari" type="button">Cari lokasi</button>
+      <p class="msg" id="msg" role="status"></p>
 
-    <hr>
+      <div class="results">
+        <div class="row"><span>Negara</span><span id="negara">–</span></div>
+        <div class="row"><span>Provinsi</span><span id="provinsi">–</span></div>
+        <div class="row"><span>Kecamatan</span><span id="kecamatan">–</span></div>
+        <div class="row"><span>Longitude</span><span id="lon">–</span></div>
+        <div class="row"><span>Latitude</span><span id="lat">–</span></div>
+      </div>
 
-    <p>
-        Koordinat :
-        <span id="negara"></span>
-    </p>
+      <details>
+        <summary>Lihat respons JSON mentah</summary>
+        <pre id="raw">Belum ada data.</pre>
+      </details>
+    </section>
 
-    <script>
+    <section class="panel plate-wrap" aria-label="Posisi di peta dunia">
+      <div class="plate" id="plate"><div class="pin" id="pin"></div></div>
+      <div class="dial"><div><span><b id="dialLon">0.0000°</b><br>bujur<br><b id="dialLat">0.0000°</b><br>lintang</span></div></div>
+    </section>
+  </div>
+</main>
 
-        fetch("/api/lokasi")
-        .then(response => response.json())
-        .then(data => {
-            
-            console.log(data);
+<script>
+  const $ = (id) => document.getElementById(id);
+  const KEY_STORE = 'maptiler_key';
+  $('apikey').value = localStorage.getItem(KEY_STORE) || '';
 
-            document.getElementById("lokasi").innerHTML = data.kota;
+  // Jenis wilayah MapTiler yang dipakai untuk tiap kolom
+  const TIPE = {
+    negara: ['country'],
+    provinsi: ['region'],
+    kecamatan: ['municipal_district', 'joint_submunicipality', 'county', 'locality', 'municipality']
+  };
 
-            document.getElementById("negara").innerHTML = data.koordinat;
-        })
-        .catch(error => {
-            console.error("error:");
-        });
+  function ambil(rantai, daftarTipe) {
+    for (const t of daftarTipe) {
+      const hit = rantai.find((r) => r.tipe === t);
+      if (hit) return hit.text;
+    }
+    return '–';
+  }
 
-    </script>
+  function pesan(teks, error = false) {
+    $('msg').textContent = teks;
+    $('msg').className = 'msg' + (error ? ' err' : '');
+  }
 
+  async function cari() {
+    const q = $('lokasi').value.trim();
+    const key = $('apikey').value.trim();
+    if (!key) return pesan('Isi API key MapTiler dulu.', true);
+    if (!q) return pesan('Isi nama lokasi dulu.', true);
+    localStorage.setItem(KEY_STORE, key);
+
+    pesan('Mencari…');
+    const url = `https://api.maptiler.com/geocoding/${encodeURIComponent(q)}.json?key=${encodeURIComponent(key)}&language=id&limit=1`;
+
+    try {
+      const res = await fetch(url);
+      const data = await res.json();
+      $('raw').textContent = JSON.stringify(data, null, 2);
+      if (!res.ok) throw new Error(data.message || `Permintaan gagal (${res.status})`);
+      if (!data.features || !data.features.length) return pesan(`Lokasi "${q}" tidak ditemukan. Coba nama lain.`, true);
+
+      const f = data.features[0];
+      const rantai = [{ tipe: f.id.split('.')[0], text: f.text }]
+        .concat((f.context || []).map((c) => ({ tipe: c.id.split('.')[0], text: c.text })));
+      const [lon, lat] = f.center;
+
+      $('negara').textContent = ambil(rantai, TIPE.negara);
+      $('provinsi').textContent = ambil(rantai, TIPE.provinsi);
+      $('kecamatan').textContent = ambil(rantai, TIPE.kecamatan);
+      $('lon').textContent = lon.toFixed(6);
+      $('lat').textContent = lat.toFixed(6);
+      $('dialLon').textContent = lon.toFixed(4) + '°';
+      $('dialLat').textContent = lat.toFixed(4) + '°';
+
+      const pin = $('pin');
+      pin.style.left = ((lon + 180) / 360 * 100) + '%';
+      pin.style.top = ((90 - lat) / 180 * 100) + '%';
+      pin.classList.add('on');
+      pesan(f.place_name);
+    } catch (e) {
+      pesan(e.message || 'Terjadi kesalahan jaringan.', true);
+    }
+  }
+
+  $('cari').addEventListener('click', cari);
+  $('lokasi').addEventListener('keydown', (e) => { if (e.key === 'Enter') cari(); });
+</script>
 </body>
 </html>
